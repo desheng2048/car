@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- 隐私考虑：挪车页面会被搜索引擎/爬虫收录。这里声明 noindex，减少号码被抓取的机会。 -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#f5f6f8">
+<title>扫码呼叫挪车</title>
+
+<style>
+  /* ==========================================================================
+     视觉规范（固定浅色，不跟随系统深色）
+     - 背景 #f5f6f8  卡片 #ffffff  主文字 #1a1a1a  次文字 #8a8f99  分割线 #eceef2
+     - 主色 #1677ff（拨号主按钮）  微信 #07c160  描边按钮白底 + #dcdfe6 边框
+     - 圆角：卡片 18px / 按钮 14px；按钮最小高度 56px，字号 17~18px，字重 600
+     ========================================================================== */
+  :root {
+    --bg:        #f5f6f8;
+    --card:      #ffffff;
+    --text:      #1a1a1a;
+    --text-sub:  #8a8f99;
+    --line:      #eceef2;
+    --primary:   #1677ff;
+    --wechat:    #07c160;
+    --border:    #dcdfe6;
+    --r-card:    18px;
+    --r-btn:     14px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  /* hidden 属性在设置了 display 的元素上会失效，这里强制兜底 */
+  [hidden] { display: none !important; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* 移动端优先：最大宽度 480px 居中，底部留出 iPhone 安全区 */
+  .screen-wrap {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* ---------- 微信内置浏览器提示条 ---------- */
+  .tip-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff7e6;
+    border: 1px solid #ffe0a3;
+    color: #8a5a00;
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .tip-bar span { flex: 1; }
+  .tip-bar button {
+    border: none; background: transparent; color: #8a5a00;
+    font-size: 16px; line-height: 1; padding: 0 2px; cursor: pointer;
+  }
+
+  /* ---------- 卡片 ---------- */
+  .card {
+    background: var(--card);
+    border-radius: var(--r-card);
+    padding: 20px 18px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(17, 24, 39, 0.04);
+  }
+  .avatar { font-size: 44px; line-height: 1; margin-bottom: 8px; }
+  .greeting { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
+  .owner-line { font-size: 15px; color: var(--text-sub); }
+  .owner-line b { color: var(--text); font-weight: 600; }
+  .owner-line .dot { margin: 0 6px; color: var(--line); }
+  .owner-line .plate-click { cursor: pointer; }
+
+  .note {
+    margin: 14px 4px 12px;
+    font-size: 13px;
+    color: var(--text-sub);
+    text-align: center;
+  }
+
+  /* ---------- 按钮 ---------- */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 56px;
+    padding: 0 16px;
+    border: none;
+    border-radius: var(--r-btn);
+    font-family: inherit;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+    background: #fff;
+    cursor: pointer;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* 点击缩放反馈 */
+  .btn:active { transform: scale(0.97); }
+  .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-primary {
+    flex-direction: column;
+    gap: 2px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 18px;
+    box-shadow: 0 6px 16px rgba(22, 119, 255, 0.26);
+  }
+  .btn-sub { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+  .btn-outline { background: #fff; border: 1px solid var(--border); }
+  .btn-wechat { background: var(--wechat); color: #fff; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  /* 微信二维码未配置时只剩一个按钮，占满整行 */
+  .grid.single { grid-template-columns: 1fr; }
+  .mt10 { margin-top: 10px; }
+
+  .btn-sm {
+    min-height: 40px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text);
+    cursor: pointer;
+    transition: transform 0.12s ease;
+  }
+  .btn-sm:active { transform: scale(0.97); }
+
+  /* ---------- 微信二维码展开区 ---------- */
+  .wechat-box {
+    margin-top: 10px;
+    padding: 16px;
+    background: var(--card);
+    border-radius: var(--r-card);
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(17, 24, 39, 0.04);
+  }
+  .wechat-box img { width: 180px; height: 180px; object-fit: contain; display: block; margin: 0 auto; }
+  .wechat-box p { margin: 8px 0 0; font-size: 12px; color: var(--text-sub); }
+
+  /* ---------- 号码显示 / 隐藏开关 ---------- */
+  .reveal {
+    display: block;
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-sub);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 14px 8px;
+    cursor: pointer;
+  }
+  .reveal:active { opacity: 0.6; }
+
+  /* ---------- 备用号码区块 ---------- */
+  .backup-card { margin-top: 10px; text-align: left; }
+  .backup-label { font-size: 13px; color: var(--text-sub); margin-bottom: 4px; }
+  .backup-num { font-size: 19px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 12px; }
+  .backup-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* ---------- 页脚 ---------- */
+  .footer {
+    margin-top: 22px;
+    text-align: center;
+    font-size: 11px;
+    color: #a8adb5;
+    line-height: 1.8;
+  }
+
+  /* ---------- Toast ---------- */
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    transform: translate(-50%, 8px);
+    max-width: 80%;
+    padding: 10px 16px;
+    background: rgba(26, 26, 26, 0.88);
+    color: #fff;
+    font-size: 14px;
+    border-radius: 12px;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    z-index: 900;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ---------- 设置向导 ---------- */
+  .setup-wrap {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    z-index: 500;
+  }
+  .setup-inner {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px 16px calc(32px + env(safe-area-inset-bottom, 0px));
+  }
+  .setup-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .setup-head h2 { font-size: 18px; margin: 0; flex: 1; }
+  .setup-desc { font-size: 12px; color: var(--text-sub); margin: 0 0 14px; }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .field .hint { font-size: 11px; color: var(--text-sub); font-weight: 400; margin-left: 4px; }
+  .field input[type="text"],
+  .field input[type="tel"],
+  .field textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 15px;
+    color: var(--text);
+    background: #fff;
+    outline: none;
+  }
+  .field input:focus, .field textarea:focus { border-color: var(--primary); }
+  .field textarea { resize: vertical; min-height: 76px; line-height: 1.6; }
+  .field-inline { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+
+  .qr-box {
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 1px dashed var(--border);
+    border-radius: var(--r-card);
+    padding: 16px;
+    text-align: center;
+    background: #fafbfc;
+  }
+  .qr-box canvas, .qr-box img { display: block; }
+  .qr-fallback { font-size: 12px; color: var(--text-sub); word-break: break-all; }
+
+  .setup-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .setup-actions.one { grid-template-columns: 1fr; }
+  .split-line { height: 1px; background: var(--line); margin: 18px 0; }
+
+  /* 预览模式下的「返回设置」悬浮按钮 */
+  .fab-back {
+    position: fixed;
+    right: 14px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    z-index: 400;
+    border: none;
+    border-radius: 999px;
+    padding: 10px 16px;
+    background: #1a1a1a;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  }
+
+  /* 打印期间由 JS 临时挂上：保证 Setting 面板在打印瞬间真正不可见
+     （不同浏览器对 position:fixed 的打印处理不一致，必须运行时再兜一层） */
+  .printing-hide { display: none !important; }
+
+  /* ==========================================================================
+     打印区（A4 贴纸）：屏幕上不可见，仅 @media print 生效
+     ========================================================================== */
+  #printSheet { display: none; }
+  @media print {
+    body { background: #ffffff !important; }
+    #screenWrap { display: none !important; }
+    /* 设置向导覆盖层独立在 #screenWrap 之外，必须单独隐藏，
+       否则 position:fixed + z-index:500 的白色面板会整页盖住贴纸 */
+    .setup-wrap { display: none !important; }
+    .fab-back { display: none !important; }
+    .toast { display: none !important; }
+    #printSheet { display: block !important; }
+    @page { size: A4; margin: 12mm; }
+    .sticker {
+      width: 120mm;
+      margin: 0 auto;
+      border: 2px dashed #999999;
+      border-radius: 6mm;
+      padding: 10mm 6mm;
+      text-align: center;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    }
+    .sticker-title { font-size: 30px; font-weight: 800; letter-spacing: 2px; }
+    .sticker-qr { margin: 8mm 0; }
+    .sticker-qr img { width: 60mm; height: 60mm; display: block; margin: 0 auto; }
+    .sticker-plate { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
+    .sticker-tip { margin-top: 4mm; font-size: 14px; color: #444444; }
+  }
+</style>
+
+<!--
+  ============================================================================
+  纯工具函数块（MoveCarUtil）
+  - 本块内 **不操作 DOM、不引用 window / document / navigator**，方便 QA 直接
+    复制整段到 Node 环境做单元测试。
+  - 通过 `typeof window !== 'undefined'` 做保护后再挂到 window.MoveCarUtil。
+  ============================================================================
+-->
+<script id="movecar-util">
+(function (global) {
+  'use strict';
+
+  /** XOR 混淆用的固定密钥（对称：编码与解码是同一个运算）。 */
+  var XOR_KEY = 'movecar2024';
+  /** 混淆串统一前缀，CONFIG.phone 支持填写 `enc:` 开头的内容。 */
+  var ENC_PREFIX = 'enc:';
+  var B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+  /**
+   * 判断单个字符是否为字母或数字（车牌打码时用于筛选「有效位」）。
+   * @param {string} ch 单个字符
+   * @return {boolean}
+   */
+  function isAlnum(ch) {
+    return /[0-9A-Za-z]/.test(ch);
+  }
+
+  /**
+   * 字符串 → UTF-8 字节数组（保证中文等字符也能被 base64 正确处理）。
+   * @param {string} str 输入字符串
+   * @return {Array<number>} 字节数组
+   */
+  function utf8ToBytes(str) {
+    var bytes = [];
+    for (var i = 0; i < str.length; i++) {
+      var code = str.charCodeAt(i);
+      if (code < 0x80) {
+        bytes.push(code);
+      } else if (code < 0x800) {
+        bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+      } else {
+        bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+      }
+    }
+    return bytes;
+  }
+
+  /**
+   * UTF-8 字节数组 → 字符串。
+   * @param {Array<number>} bytes 字节数组
+   * @return {string}
+   */
+  function bytesToUtf8(bytes) {
+    var out = '';
+    var i = 0;
+    while (i < bytes.length) {
+      var b = bytes[i++];
+      if (b < 0x80) {
+        out += String.fromCharCode(b);
+      } else if (b < 0xe0) {
+        out += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i++] & 0x3f));
+      } else {
+        out += String.fromCharCode(((b & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f));
+      }
+    }
+    return out;
+  }
+
+  /**
+   * 字节数组 → Base64 字符串（自己实现，避免依赖 btoa，Node 环境也能跑）。
+   * @param {Array<number>} bytes 字节数组
+   * @return {string}
+   */
+  function bytesToBase64(bytes) {
+    var out = '';
+    var len = bytes.length;
+    var i = 0;
+    while (i < len) {
+      var rest = len - i;
+      var b0 = bytes[i];
+      var b1 = rest > 1 ? bytes[i + 1] : 0;
+      var b2 = rest > 2 ? bytes[i + 2] : 0;
+      var n = (b0 << 16) | (b1 << 8) | b2;
+      out += B64_CHARS.charAt((n >> 18) & 0x3f) + B64_CHARS.charAt((n >> 12) & 0x3f);
+      out += rest > 1 ? B64_CHARS.charAt((n >> 6) & 0x3f) : '=';
+      out += rest > 2 ? B64_CHARS.charAt(n & 0x3f) : '=';
+      i += 3;
+    }
+    return out;
+  }
+
+  /**
+   * Base64 字符串 → 字节数组。
+   * @param {string} str Base64 字符串
+   * @return {Array<number>}
+   */
+  function base64ToBytes(str) {
+    var bytes = [];
+    var buf = 0;
+    var bits = 0;
+    for (var i = 0; i < str.length; i++) {
+      var ch = str.charAt(i);
+      if (ch === '=') break;
+      var val = B64_CHARS.indexOf(ch);
+      if (val < 0) continue;
+      buf = (buf << 6) | val;
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        bytes.push((buf >> bits) & 0xff);
+      }
+    }
+    return bytes;
+  }
+
+  /**
+   * 手机号打码：13800138000 → 138****8000。
+   * - 正常情况：保留前 3 位 + 后 4 位，中间全部替换为 `****`。
+   * - 兜底：号码长度异常（不足 7 位）时只显示前 3 位 + `****`，避免泄露。
+   * @param {string} phone 明文号码
+   * @return {string} 打码后的号码；入参非法时返回空串
+   */
+  function maskPhone(phone) {
+    if (typeof phone !== 'string') return '';
+    // 去掉常见的空格、短横线，避免视觉错位
+    var p = phone.replace(/[\s-]/g, '');
+    if (!p) return '';
+    if (p.length < 7) {
+      // 长度异常（座机短号 / 填错）：只露出前 3 位
+      return p.slice(0, 3) + '****';
+    }
+    return p.slice(0, 3) + '****' + p.slice(-4);
+  }
+
+  /**
+   * 车牌打码：粤A·12345 → 粤A·1**45。
+   * 规则：保留「字母数字区位」的前 2 位与后 2 位，中间每一位替换为一个 `*`；
+   *      中文省份、分隔符（·、-）等非字母数字部分原样保留。
+   * @param {string} plate 原始车牌
+   * @return {string} 打码后的车牌；入参为空时返回空串
+   */
+  function maskPlate(plate) {
+    if (plate === null || plate === undefined) return '';
+    var s = String(plate).trim();
+    if (!s) return '';
+
+    // 收集所有字母数字字符的下标
+    var chars = s.split('');
+    var alnumIndex = [];
+    for (var i = 0; i < chars.length; i++) {
+      if (isAlnum(chars[i])) alnumIndex.push(i);
+    }
+    var total = alnumIndex.length;
+    if (total === 0) return s; // 没有任何字母数字，原样返回
+
+    // 位数太少时只保留首尾各 1 位，其余打码
+    var keep = total > 4 ? 2 : 1;
+    var visible = {};
+    for (var k = 0; k < total; k++) {
+      if (k < keep || k >= total - keep) visible[alnumIndex[k]] = true;
+    }
+
+    var out = '';
+    for (var j = 0; j < chars.length; j++) {
+      if (!isAlnum(chars[j]) || visible[j]) {
+        out += chars[j];
+      } else {
+        out += '*';
+      }
+    }
+    return out;
+  }
+
+  /**
+   * 判断 UA 是否为 iOS（用于短信链接分隔符的分支）。
+   * @param {string} ua navigator.userAgent 字符串
+   * @return {boolean}
+   */
+  function isIOS(ua) {
+    var s = typeof ua === 'string' ? ua : '';
+    // iPad 在 iOS 13+ 会以 Macintosh 的 UA 出现，这里只识别明确的 iPhone / iPad / iPod
+    return /iPhone|iPad|iPod|iOS/i.test(s);
+  }
+
+  /**
+   * 构造短信链接。
+   * iOS 只认 `sms:号码&body=文案` 写法；Android / 其他平台使用 `?body=` 更通用。
+   * 因此这里按 UA 判断平台后再拼分隔符，避免 iOS 上预填内容丢失。
+   * @param {string} phone 明文号码
+   * @param {string} text  短信预填文案
+   * @param {string=} ua   navigator.userAgent，缺省时按 Android 规则（?body=）
+   * @return {string} sms: 链接
+   */
+  function buildSmsLink(phone, text, ua) {
+    var p = encodeURIComponent(String(phone === null || phone === undefined ? '' : phone).replace(/[\s]/g, ''));
+    var body = encodeURIComponent(String(text === null || text === undefined ? '' : text));
+    var sep = isIOS(ua) ? '&' : '?';
+    return 'sms:' + p + sep + 'body=' + body;
+  }
+
+  /**
+   * 号码混淆（防爬虫）：XOR 固定密钥 → Base64，输出 `enc:xxxx` 形式。
+   * @param {string} plain 明文号码
+   * @return {string} `enc:` 开头的混淆串；明文为空时返回空串
+   */
+  function encodePhone(plain) {
+    var s = String(plain === null || plain === undefined ? '' : plain).trim();
+    if (!s) return '';
+    var bytes = utf8ToBytes(s);
+    var out = [];
+    for (var i = 0; i < bytes.length; i++) {
+      out.push(bytes[i] ^ XOR_KEY.charCodeAt(i % XOR_KEY.length));
+    }
+    return ENC_PREFIX + bytesToBase64(out);
+  }
+
+  /**
+   * 号码还原：支持 `enc:` 混淆串，也兼容直接传入的明文。
+   * @param {string} str `enc:xxxx` 或明文号码
+   * @return {string} 明文号码；解码失败时返回空串（明文入参原样返回 Trim 后的值）
+   */
+  function decodePhone(str) {
+    var s = String(str === null || str === undefined ? '' : str).trim();
+    if (s.indexOf(ENC_PREFIX) !== 0) return s; // 明文，直接返回
+    try {
+      var bytes = base64ToBytes(s.slice(ENC_PREFIX.length));
+      var out = [];
+      for (var i = 0; i < bytes.length; i++) {
+        out.push(bytes[i] ^ XOR_KEY.charCodeAt(i % XOR_KEY.length));
+      }
+      return bytesToUtf8(out);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /**
+   * 取得「真实可用」的明文号码。
+   * 支持两种入参：直接传字符串，或传 CONFIG 这样的对象（取其 phone 字段）。
+   * @param {string|Object} source 号码字符串或含 phone 字段的对象
+   * @return {string} 明文号码
+   */
+  function getPhone(source) {
+    var raw = source;
+    if (source && typeof source === 'object') raw = source.phone;
+    if (typeof raw !== 'string') return '';
+    return decodePhone(raw);
+  }
+
+  /**
+   * 取出页面的「干净地址」：去掉 query 与 hash，用于生成二维码。
+   * @param {string} href location.href
+   * @return {string} 不含 ? 和 # 的地址
+   */
+  function getPageUrl(href) {
+    var s = String(href === null || href === undefined ? '' : href);
+    var h = s.indexOf('#');
+    if (h > -1) s = s.slice(0, h);
+    var q = s.indexOf('?');
+    if (q > -1) s = s.slice(0, q);
+    return s;
+  }
+
+  /**
+   * 极简 query 解析：'?setup=1' → {setup: '1'}。
+   * @param {string} search location.search
+   * @return {Object<string,string>}
+   */
+  function parseQuery(search) {
+    var out = {};
+    var s = String(search === null || search === undefined ? '' : search);
+    if (s.charAt(0) === '?') s = s.slice(1);
+    if (!s) return out;
+    var parts = s.split('&');
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      var kv = parts[i].split('=');
+      out[decodeURIComponent(kv[0])] = decodeURIComponent(kv.slice(1).join('=') || '');
+    }
+    return out;
+  }
+
+  /** 对外暴露的纯函数集合 */
+  var MoveCarUtil = {
+    maskPhone: maskPhone,
+    maskPlate: maskPlate,
+    buildSmsLink: buildSmsLink,
+    encodePhone: encodePhone,
+    decodePhone: decodePhone,
+    getPhone: getPhone,
+    getPageUrl: getPageUrl,
+    parseQuery: parseQuery,
+    isIOS: isIOS
+  };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = MoveCarUtil;           // Node 环境：直接 require 这段脚本
+  }
+  if (typeof window !== 'undefined') {
+    window.MoveCarUtil = MoveCarUtil;       // 浏览器环境
+  }
+  if (typeof global !== 'undefined' && typeof window === 'undefined') {
+    global.MoveCarUtil = MoveCarUtil;       // 其它宿主（如 Worker）
+  }
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+</script>
+
+</head>
+
+<body>
+
+<!-- ==========================================================================
+     屏幕内容（打印时整体隐藏）
+     ========================================================================== -->
+<div class="screen-wrap" id="screenWrap">
+
+  <!-- 微信内置浏览器提示条 -->
+  <div class="tip-bar" id="wechatTip" hidden>
+    <span>若在微信内无法拨号，请点右上角 ··· → 在浏览器中打开</span>
+    <button type="button" id="closeTip" aria-label="关闭提示">✕</button>
+  </div>
+
+  <!-- ---------- 顶部小卡片 ---------- -->
+  <section class="card">
+    <div class="avatar">🚗</div>
+    <h1 class="greeting" id="greetingText">不好意思，给您添麻烦了</h1>
+    <div class="owner-line">
+      <b id="ownerText">得胜</b> 的车<span id="plateSep" class="dot">·</span><span id="plateText" class="plate-click"></span>
+    </div>
+  </section>
+
+  <!-- ---------- 承诺语 ---------- -->
+  <p class="note" id="noteText"></p>
+
+  <!-- ---------- 主按钮：一键拨号 ---------- -->
+  <button type="button" class="btn btn-primary" id="callBtn">
+    <span>📞 一键拨号，呼叫车主</span>
+    <span class="btn-sub" id="callNumber">138****8000</span>
+  </button>
+
+  <!-- ---------- 次按钮组 ---------- -->
+  <div class="grid" id="actionGrid">
+    <button type="button" class="btn btn-outline" id="smsBtn">💬 发短信</button>
+    <button type="button" class="btn btn-wechat" id="wechatBtn">🧧 微信联系</button>
+  </div>
+
+  <!-- ---------- 微信二维码就地展开区 ---------- -->
+  <div class="wechat-box" id="wechatBox" hidden>
+    <img id="wechatImg" alt="车主微信二维码">
+    <p>长按二维码保存到相册，再用微信「扫一扫 · 相册」添加</p>
+  </div>
+
+  <!-- ---------- 号码显示 / 隐藏开关 ---------- -->
+  <button type="button" class="reveal" id="revealBtn">
+    <span id="revealText">点击显示完整号码</span>
+  </button>
+
+  <!-- ---------- 复制号码 ---------- -->
+  <button type="button" class="btn btn-outline" id="copyBtn">📋 复制号码</button>
+
+  <!-- ---------- 备用号码区块 ---------- -->
+  <section class="card backup-card" id="backupBlock" hidden>
+    <div class="backup-label" id="backupLabel">备用联系人</div>
+    <div class="backup-num" id="backupNumber"></div>
+    <div class="backup-actions">
+      <button type="button" class="btn-sm" id="backupCallBtn">📞 拨打</button>
+      <button type="button" class="btn-sm" id="backupCopyBtn">📋 复制</button>
+    </div>
+  </section>
+
+  <!-- ---------- 页脚 ---------- -->
+  <footer class="footer">
+    <div>本页面不会收集任何信息 · 感谢您的理解</div>
+    <div>Made with ❤️</div>
+  </footer>
+
+</div><!-- /#screenWrap -->
+
+<!-- 预览模式下的返回设置悬浮按钮 -->
+<button type="button" class="fab-back" id="fabBack" hidden>⚙ 返回设置</button>
+
+<!-- ==========================================================================
+     设置向导（默认隐藏）
+     ========================================================================== -->
+<div class="setup-wrap" id="setupWrap" hidden>
+  <div class="setup-inner">
+    <div class="setup-head">
+      <span style="font-size:24px">⚙️</span>
+      <h2>挪车码设置向导</h2>
+      <button type="button" class="btn-sm" id="btnExitSetup">退出设置</button>
+    </div>
+    <p class="setup-desc">改完点「生成配置代码」，把代码粘回 index.html 顶部的 CONFIG 区即可永久生效。</p>
+
+    <div class="field">
+      <label for="f_ownerName">车主称呼</label>
+      <input type="text" id="f_ownerName" placeholder="例如：得胜">
+    </div>
+
+    <div class="field">
+      <label for="f_plate">车牌号<span class="hint">留空则不显示车牌行</span></label>
+      <input type="text" id="f_plate" placeholder="例如：粤A·12345">
+    </div>
+
+    <div class="field field-inline">
+      <input type="checkbox" id="f_plateMasked">
+      <label for="f_plateMasked" style="margin:0">车牌中间打码（粤A·1**45）</label>
+    </div>
+
+    <div class="field">
+      <label for="f_phone">主手机号<span class="hint">示例：13800138000</span></label>
+      <input type="tel" id="f_phone" placeholder="13800138000">
+    </div>
+
+    <div class="field">
+      <label for="f_phoneBackup">备用号码<span class="hint">留空则隐藏该区块</span></label>
+      <input type="tel" id="f_phoneBackup" placeholder="可留空">
+    </div>
+
+    <div class="field">
+      <label for="f_backupLabel">备用联系人说明</label>
+      <input type="text" id="f_backupLabel" placeholder="例如：家属电话">
+    </div>
+
+    <div class="field">
+      <label for="f_wechatQR">微信二维码图片<span class="hint">相对路径如 wechat.png，或 data:image/...;base64</span></label>
+      <input type="text" id="f_wechatQR" placeholder="留空则隐藏微信按钮">
+    </div>
+
+    <div class="field">
+      <label for="f_smsText">一键短信预填文案</label>
+      <textarea id="f_smsText" rows="3"></textarea>
+    </div>
+
+    <div class="field">
+      <label for="f_greeting">页面顶部礼貌用语</label>
+      <input type="text" id="f_greeting">
+    </div>
+
+    <div class="field">
+      <label for="f_note">承诺语<span class="hint">留空则隐藏</span></label>
+      <input type="text" id="f_note">
+    </div>
+
+    <div class="field field-inline">
+      <input type="checkbox" id="f_showTipOnReveal">
+      <label for="f_showTipOnReveal" style="margin:0">显示号码前先提示「请您在需要时再查看」</label>
+    </div>
+
+    <div class="split-line"></div>
+
+    <div class="field">
+      <label for="f_pageUrl">页面地址<span class="hint">把这个地址做成二维码贴在挡风玻璃上</span></label>
+      <input type="text" id="f_pageUrl">
+    </div>
+
+    <button type="button" class="btn btn-primary" id="btnGenQr">🔳 生成二维码</button>
+    <div class="setup-actions">
+      <button type="button" class="btn btn-outline" id="btnDownloadQr">⬇️ 下载 PNG</button>
+      <button type="button" class="btn btn-outline" id="btnCopyUrl">🔗 复制地址</button>
+    </div>
+
+    <div class="field" style="margin-top:12px">
+      <label>二维码预览</label>
+      <div class="qr-box" id="qrBox"><span class="qr-fallback">尚未生成，点上方「生成二维码」</span></div>
+    </div>
+
+    <div class="split-line"></div>
+
+    <button type="button" class="btn btn-outline" id="btnGenCode">📝 生成配置代码</button>
+    <textarea id="genCode" rows="8" placeholder="点上方按钮后，这里会出现可直接粘回 CONFIG 的代码"></textarea>
+    <div class="setup-actions">
+      <button type="button" class="btn btn-outline" id="btnCopyCode">📋 一键复制代码</button>
+      <button type="button" class="btn btn-outline" id="btnPrint">🖨 打印贴纸</button>
+    </div>
+
+    <div class="split-line"></div>
+
+    <div class="setup-actions">
+      <button type="button" class="btn btn-outline" id="btnSaveLocal">💾 保存到本机</button>
+      <button type="button" class="btn btn-outline" id="btnPreview">👀 仅本机预览</button>
+    </div>
+    <button type="button" class="btn btn-outline mt10" id="btnRestore">↩️ 恢复文件原始配置</button>
+    <p class="setup-desc" style="margin-top:12px">
+      说明：「保存到本机」把表单写进 localStorage（key: <b>movecar_setup</b>），下次进设置自动回填；
+      「仅本机预览」只改当前页面显示，不会改动 index.html 源码。
+    </p>
+  </div>
+</div><!-- /#setupWrap -->
+
+<!-- ==========================================================================
+     打印贴纸（屏幕不可见，打印时出现）
+     ========================================================================== -->
+<div id="printSheet">
+  <div class="sticker">
+    <div class="sticker-title">扫码呼叫挪车</div>
+    <div class="sticker-qr"><img id="printQrImg" alt="挪车二维码"></div>
+    <div class="sticker-plate" id="printPlate"></div>
+    <div class="sticker-tip">临时停车，给您添麻烦了</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!--
+  ============================================================================
+  主程序
+  ⚠️ 普通用户只需要修改下面的 CONFIG，其余代码一行都不用动。
+  ============================================================================
+-->
+<script>
+/* ==========================================================================
+   👇👇👇 配置区开始：车主只要改这一段 👇👇👇
+
+   使用说明：
+   1. 所有字段都用英文引号包起来（字符串），末尾逗号别忘了。
+   2. phone 可以直接填明文号码；更安全的方式是填 `enc:` 开头的混淆串
+      （在设置向导里点「生成配置代码」即可自动产出）。
+   3. 不知道怎么填的字段保持默认即可，留空代表「不显示这一项」。
+   4. 示例值 13800138000 是占位号码，请一定替换成你自己的号码。
+   5. 可视化配置（不用手写代码）：在页面地址后面加 `?setup=1` 回车，
+      例如 https://xxx.github.io/index.html?setup=1
+      （手机上也可以在页面里连点车牌 5 次进入，车牌留空时只能用地址方式）。
+
+   ========================================================================== */
+const CONFIG = {
+  ownerName: '得胜',              // 车主称呼，展示为「得胜 的车」
+  plate: '浙A·F23123',             // 车牌号；设为 '' 则不显示车牌行
+  plateMasked: false,              // true=车牌中间打码（粤A·1**45），false=完整显示
+  phone: '19106598590',           // 主手机号（明文）；也可填 enc: 开头的混淆串
+  phoneBackup: '17858002181',                // 备用号码，留空则隐藏「备用号码」区块
+  backupLabel: '备用联系人·车主老婆',       // 备用号码的文字说明，如「家属电话」
+  wechatQR: 'wechat.jpg',                   // 微信二维码：'wechat.png' 或 data:image/...;base64，留空则隐藏按钮
+  smsText: '您好，您的车挡道了，麻烦挪一下，谢谢！',  // 一键短信的预填文案
+  greeting: '不好意思，给您添麻烦了',  // 页面顶部礼貌用语
+  note: '我马上就到，请稍等 1 分钟',   // 副标题/承诺语，留空则隐藏
+  showTipOnReveal: true           // 点击显示号码时，是否先提示「请您在需要时再查看，感谢」
+};
+/* ==========================================================================
+   👆👆👆 配置区结束：下面的代码不需要修改 👆👆👆
+   ========================================================================== */
+
+(function () {
+  'use strict';
+
+  var U = window.MoveCarUtil;
+  var LS_KEY = 'movecar_setup';
+
+  /** 文件里的原始 CONFIG（做一层浅拷贝，恢复原始配置时用它） */
+  var FILE_CONFIG = {};
+  for (var k in CONFIG) {
+    if (Object.prototype.hasOwnProperty.call(CONFIG, k)) FILE_CONFIG[k] = CONFIG[k];
+  }
+
+  /** 当前生效的配置（可能被「仅本机预览」覆盖） */
+  var EC = cloneObj(FILE_CONFIG);
+
+  /** 号码是否已明文展开 */
+  var revealed = false;
+  /** 微信二维码是否展开 */
+  var wechatOpen = false;
+  /** 最后一次生成的二维码 dataURL，下载 PNG / 打印贴纸都用它 */
+  var lastQrDataUrl = '';
+  var toastTimer = null;
+  var plateClickCount = 0;
+  var plateClickTimer = null;
+
+  /* ---------------------------------------------------------------------
+     小工具
+     --------------------------------------------------------------------- */
+
+  function cloneObj(obj) {
+    var out = {};
+    for (var key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) out[key] = obj[key];
+    }
+    return out;
+  }
+
+  function $(id) {
+    return document.getElementById(id);
+  }
+
+  function toast(msg) {
+    var el = $('toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      el.classList.remove('show');
+    }, 2200);
+  }
+
+  /** 校验新号码 / 取得明文主号码 */
+  function mainPhone() {
+    return U.getPhone(EC.phone);
+  }
+
+  /** 取得明文备用号码 */
+  function backupPhone() {
+    return U.getPhone(EC.phoneBackup);
+  }
+
+  /** 当前应该展示的号码文本（未展开则打码） */
+  function showNumber(plain) {
+    if (!plain) return '未配置号码';
+    return revealed ? plain : U.maskPhone(plain);
+  }
+
+  /**
+   * 复制文本到剪贴板。
+   * 优先 navigator.clipboard（需要 HTTPS 或 localhost 的安全上下文）；
+   * 失败或非安全上下文时降级到隐藏 textarea + document.execCommand('copy')，
+   * 以兼容老旧 WebView 与微信内置浏览器。
+   * @param {string} text 待复制文本
+   * @return {Promise<boolean>}
+   */
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(function () {
+        return true;
+      }, function () {
+        return legacyCopy(text);
+      });
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+
+  /**
+   * 兜底复制：临时 textarea + execCommand。
+   * 注意 textarea 必须真的插入文档流里才能被选中；用 fixed + 移出屏幕避免跳动。
+   * @param {string} text 待复制文本
+   * @return {boolean} 是否成功
+   */
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', 'readonly');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.left = '0';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    if (ta.setSelectionRange) ta.setSelectionRange(0, ta.value.length);
+    var ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (e) {
+      ok = false;
+    }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  /** 复制号码并提示结果 */
+  function copyNumber(plain, label) {
+    if (!plain) {
+      toast('还没有配置号码');
+      return;
+    }
+    copyToClipboard(plain).then(function (ok) {
+      if (ok) {
+        toast('已复制' + (label ? '（' + label + '）' : ''));
+      } else {
+        toast('复制失败，请长按号码手动复制');
+      }
+    });
+  }
+
+  /** tel: 链接只保留数字与 +，避免运营商或含分机号的号码被错误解析 */
+  function telLink(plain) {
+    return 'tel:' + String(plain || '').replace(/[^\d+]/g, '');
+  }
+
+  /* ---------------------------------------------------------------------
+     渲染主界面
+     --------------------------------------------------------------------- */
+
+  function render() {
+    var p1 = mainPhone();
+    var p2 = backupPhone();
+    var plate = String(EC.plate || '').trim();
+
+    document.title = EC.ownerName ? (EC.ownerName + ' 的车 · 扫码呼叫挪车') : '扫码呼叫挪车';
+
+    $('greetingText').textContent = EC.greeting || '';
+    $('ownerText').textContent = EC.ownerName || '车主';
+
+    // 车牌：留空则整行隐藏（连同前面的「·」分隔符）
+    var plateEl = $('plateText');
+    if (plate) {
+      plateEl.textContent = EC.plateMasked ? U.maskPlate(plate) : plate;
+      plateEl.hidden = false;
+      $('plateSep').hidden = false;
+    } else {
+      plateEl.hidden = true;
+      $('plateSep').hidden = true;
+    }
+
+    // 承诺语：留空则隐藏
+    var noteEl = $('noteText');
+    noteEl.textContent = EC.note || '';
+    noteEl.hidden = !EC.note;
+
+    // 主按钮上的号码
+    $('callNumber').textContent = showNumber(p1);
+
+    // 微信按钮：没有配置二维码时隐藏，只剩一个按钮时占满整行
+    var hasWechat = !!String(EC.wechatQR || '').trim();
+    $('wechatBtn').hidden = !hasWechat;
+    $('actionGrid').className = hasWechat ? 'grid' : 'grid single';
+    if (!hasWechat) closeWechat(false);
+
+    // 显示 / 隐藏号码开关
+    var revealBtn = $('revealBtn');
+    if (p1) {
+      revealBtn.hidden = false;
+      $('revealText').textContent = showNumber(p1) + (revealed ? ' · 点击收起号码' : ' · 点击显示完整号码');
+    } else {
+      revealBtn.hidden = true;
+    }
+
+    // 复制按钮：没有号码时禁用
+    var copyBtn = $('copyBtn');
+    copyBtn.disabled = !p1;
+
+    // 备用号码区块
+    var backupBlock = $('backupBlock');
+    if (p2 && String(p2).length > 0) {
+      backupBlock.hidden = false;
+      $('backupLabel').textContent = EC.backupLabel || '备用联系人';
+      $('backupNumber').textContent = showNumber(p2);
+    } else {
+      backupBlock.hidden = true;
+    }
+  }
+
+  /** 展开 / 收起微信二维码（就地展开，不做页面跳转） */
+  function toggleWechat() {
+    if (wechatOpen) {
+      closeWechat(true);
+    } else {
+      var src = String(EC.wechatQR || '').trim();
+      if (!src) return;
+      var img = $('wechatImg');
+      img.src = src;
+      img.alt = (EC.ownerName || '车主') + '的微信二维码';
+      $('wechatBox').hidden = false;
+      wechatOpen = true;
+      $('wechatBtn').textContent = '🧧 收起二维码';
+    }
+  }
+
+  function closeWechat(resetText) {
+    $('wechatBox').hidden = true;
+    wechatOpen = false;
+    if (resetText) $('wechatBtn').textContent = '🧧 微信联系';
+  }
+
+  /* ---------------------------------------------------------------------
+     事件绑定
+     --------------------------------------------------------------------- */
+
+  function bindEvents() {
+    // 一键拨号
+    $('callBtn').addEventListener('click', function () {
+      var p1 = mainPhone();
+      if (!p1) {
+        toast('还没有配置号码');
+        return;
+      }
+      window.location.href = telLink(p1);
+    });
+
+    // 一键短信（UA 决定 iOS 用 &body=、其它用 ?body=）
+    $('smsBtn').addEventListener('click', function () {
+      var p1 = mainPhone();
+      if (!p1) {
+        toast('还没有配置号码');
+        return;
+      }
+      window.location.href = U.buildSmsLink(p1, EC.smsText, navigator.userAgent);
+    });
+
+    // 微信二维码就地展开
+    $('wechatBtn').addEventListener('click', toggleWechat);
+
+    // 号码明文 / 打码切换
+    $('revealBtn').addEventListener('click', function () {
+      if (!revealed) {
+        revealed = true;
+        if (EC.showTipOnReveal) toast('请您在需要时再查看，感谢');
+      } else {
+        revealed = false;
+      }
+      render();
+    });
+
+    // 复制主号码
+    $('copyBtn').addEventListener('click', function () {
+      copyNumber(mainPhone(), '');
+    });
+
+    // 备用号码：拨号 + 复制
+    $('backupCallBtn').addEventListener('click', function () {
+      var p2 = backupPhone();
+      if (!p2) {
+        toast('还没有配置备用号码');
+        return;
+      }
+      window.location.href = telLink(p2);
+    });
+    $('backupCopyBtn').addEventListener('click', function () {
+      copyNumber(backupPhone(), EC.backupLabel || '备用联系人');
+    });
+
+    // 连点车牌 5 次 → 进入设置向导（隐藏彩蛋入口，扫码者不会误触）
+    $('plateText').addEventListener('click', function () {
+      plateClickCount++;
+      if (plateClickTimer) clearTimeout(plateClickTimer);
+      plateClickTimer = setTimeout(function () {
+        plateClickCount = 0;
+      }, 2000);
+      if (plateClickCount >= 5) {
+        plateClickCount = 0;
+        enterSetup(true);
+      }
+    });
+
+    // 微信内置浏览器提示条
+    $('closeTip').addEventListener('click', function () {
+      $('wechatTip').hidden = true;
+    });
+
+    bindSetupEvents();
+    bindFab();
+  }
+
+  function bindFab() {
+    $('fabBack').addEventListener('click', function () {
+      enterSetup(false);
+    });
+  }
+
+  /* ---------------------------------------------------------------------
+     设置向导
+     --------------------------------------------------------------------- */
+
+  var FIELDS = ['ownerName', 'plate', 'phone', 'phoneBackup', 'backupLabel',
+                'wechatQR', 'smsText', 'greeting', 'note'];
+
+  function fieldId(name) {
+    return 'f_' + name;
+  }
+
+  /** 表单 → 配置对象 */
+  function readForm() {
+    var obj = cloneObj(FILE_CONFIG);
+    for (var i = 0; i < FIELDS.length; i++) {
+      var name = FIELDS[i];
+      var el = $(fieldId(name));
+      if (el) obj[name] = el.value;
+    }
+    obj.plateMasked = !!$(fieldId('plateMasked')).checked;
+    obj.showTipOnReveal = !!$(fieldId('showTipOnReveal')).checked;
+    return obj;
+  }
+
+  /** 配置对象 → 表单 */
+  function fillForm(cfg) {
+    for (var i = 0; i < FIELDS.length; i++) {
+      var name = FIELDS[i];
+      var el = $(fieldId(name));
+      if (el) el.value = cfg[name] === undefined ? '' : String(cfg[name]);
+    }
+    // 表单里永远展示明文号码（车主自己看），生成代码时再自动混淆
+    $(fieldId('phone')).value = U.getPhone(cfg.phone);
+    $(fieldId('phoneBackup')).value = U.getPhone(cfg.phoneBackup);
+    $(fieldId('plateMasked')).checked = cfg.plateMasked !== false;
+    $(fieldId('showTipOnReveal')).checked = cfg.showTipOnReveal !== false;
+    setPageUrlField();
+  }
+
+  function setPageUrlField() {
+    var el = $(fieldId('pageUrl'));
+    if (el && !el.value) el.value = U.getPageUrl(window.location.href);
+  }
+
+  /** 进入设置向导。fromEgg=true 表示是彩蛋/首次进入，需要提示 */
+  function enterSetup(fromEgg) {
+    $('setupWrap').hidden = false;
+    $('fabBack').hidden = true;
+    fillForm(loadSaved() || EC);
+    if (fromEgg) toast('已进入设置向导，改完记得生成配置代码');
+  }
+
+  function exitSetup() {
+    $('setupWrap').hidden = true;
+    // 退出时把地址里的 ?setup=1 去掉，避免误分享给别人
+    try {
+      if (U.parseQuery(window.location.search).setup) {
+        window.history.replaceState({}, '', U.getPageUrl(window.location.href));
+      }
+    } catch (e) {
+      /* file:// 协议下 history.replaceState 可能抛错，忽略即可 */
+    }
+  }
+
+  /** 读取 localStorage 中保存的草稿 */
+  function loadSaved() {
+    try {
+      var raw = window.localStorage.getItem(LS_KEY);
+      if (!raw) return null;
+      var obj = JSON.parse(raw);
+      return (obj && typeof obj === 'object') ? obj : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveSaved(cfg) {
+    try {
+      window.localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** 当前地址（表单里的地址优先，空则取页面地址） */
+  function targetUrl() {
+    var v = String($(fieldId('pageUrl')).value || '').trim();
+    return v || U.getPageUrl(window.location.href);
+  }
+
+  /**
+   * 动态加载 qrcodejs CDN。
+   * @param {function(boolean)} cb true=加载成功
+   */
+  function loadQrLib(cb) {
+    if (window.QRCode) {
+      cb(true);
+      return;
+    }
+    // done 保证 cb 只被调用一次（超时与 onerror 可能同时发生）
+    var done = false;
+    function finish(ok) {
+      if (done) return;
+      done = true;
+      cb(ok);
+    }
+    var timer = setTimeout(function () {
+      // jsdelivr 在国内可能请求挂起（既不 onload 也不 onerror），
+      // 超时后主动走降级分支，避免按钮点了永远没反应
+      finish(false);
+    }, 8000);
+
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+    s.onload = function () {
+      clearTimeout(timer);
+      finish(!!window.QRCode);
+    };
+    s.onerror = function () {
+      clearTimeout(timer);
+      finish(false);
+    };
+    document.head.appendChild(s);
+  }
+
+  /** 二维码不可用时的降级提示（含复制地址按钮） */
+  function showQrFallback(msg) {
+    var box = $('qrBox');
+    box.innerHTML = '';
+    var tip = document.createElement('div');
+    tip.className = 'qr-fallback';
+    tip.textContent = msg;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-sm';
+    btn.style.marginTop = '10px';
+    btn.textContent = '🔗 复制页面地址';
+    btn.addEventListener('click', function () {
+      copyNumber(targetUrl(), '');
+    });
+    box.appendChild(tip);
+    box.appendChild(btn);
+    lastQrDataUrl = '';
+  }
+
+  /**
+   * 生成二维码。成功时同时把 dataURL 缓存到 lastQrDataUrl，
+   * 供「下载 PNG」和「打印贴纸」复用（避免重复渲染）。
+   * @param {function(boolean)=} cb 完成回调
+   */
+  function genQr(cb) {
+    var box = $('qrBox');
+    var url = targetUrl();
+    loadQrLib(function (ok) {
+      if (!ok) {
+        showQrFallback('离线环境下无法自动生成二维码，请手动用草料二维码 / 微信生成，地址：' + url);
+        if (cb) cb(false);
+        return;
+      }
+      try {
+        box.innerHTML = '';
+        /* eslint-disable no-new */
+        new window.QRCode(box, {
+          text: url,
+          width: 200,
+          height: 200,
+          colorDark: '#1a1a1a',
+          colorLight: '#ffffff',
+          correctLevel: window.QRCode.CorrectLevel.M
+        });
+        // canvas 存在就导出 PNG dataURL（同源渲染，不会被跨域污染）
+        var canvas = box.querySelector('canvas');
+        if (canvas) {
+          lastQrDataUrl = canvas.toDataURL('image/png');
+        } else {
+          var img = box.querySelector('img');
+          lastQrDataUrl = img && img.src ? img.src : '';
+        }
+        if (cb) cb(true);
+      } catch (e) {
+        showQrFallback('二维码生成失败，请手动用草料二维码生成，地址：' + url);
+        if (cb) cb(false);
+      }
+    });
+  }
+
+  /** 下载二维码 PNG；拿不到图片数据时提示长按保存 */
+  function downloadQr() {
+    var href = lastQrDataUrl;
+    var img = $('qrBox').querySelector('img');
+    if (!href && img && img.src && (img.src.indexOf('data:') === 0 || img.src.indexOf('blob:') === 0)) {
+      href = img.src;
+    }
+    if (!href) {
+      toast('无法自动下载，请先生成二维码后长按图片保存');
+      return;
+    }
+    var a = document.createElement('a');
+    a.href = href;
+    a.download = 'movecar-qrcode.png';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast('已尝试下载 PNG');
+  }
+
+  /**
+   * 生成可粘回文件的 `const CONFIG = {...}` 代码块。
+   * 主号码默认输出 `enc:` 混淆串，避免明文号码直接暴露在页面源码里。
+   * @param {Object} cfg 配置对象
+   * @return {string} 代码文本
+   */
+  function buildConfigCode(cfg) {
+    function q(v) {
+      return JSON.stringify(String(v === undefined || v === null ? '' : v));
+    }
+    var enc = '';
+    var encBackup = '';
+    try {
+      enc = U.encodePhone(U.getPhone(cfg.phone));
+      // 备用号码同样混淆，避免明文号码留在 HTML 源码里
+      encBackup = U.encodePhone(U.getPhone(cfg.phoneBackup));
+    } catch (e) {
+      enc = '';
+      encBackup = '';
+    }
+    var phoneValue = enc ? enc : String(cfg.phone || '');
+    // 备用号码为空时保持空字符串（encodePhone('') 本身就是 ''，这里只是双重保险）
+    var backupValue = cfg.phoneBackup ? (encBackup ? encBackup : String(cfg.phoneBackup)) : '';
+
+    // 注释统一用「一个空格 + //」，避免号码长度不同导致对齐错乱
+    return [
+      'const CONFIG = {',
+      '  ownerName: ' + q(cfg.ownerName) + ', // 车主称呼，展示为「xxx 的车」',
+      '  plate: ' + q(cfg.plate) + ', // 车牌号；设为 \'\' 则不显示车牌行',
+      '  plateMasked: ' + (cfg.plateMasked !== false) + ', // true=车牌中间打码（粤A·1**45），false=完整显示',
+      '  phone: ' + q(phoneValue) + ', // 已做混淆的 enc: 串，等价于明文号码',
+      '  phoneBackup: ' + q(backupValue) + ', // 备用号码（同样做了混淆），留空则隐藏该区块',
+      '  backupLabel: ' + q(cfg.backupLabel) + ', // 备用号码的文字说明，如「家属电话」',
+      '  wechatQR: ' + q(cfg.wechatQR) + ', // 微信二维码图片路径或 base64；留空则隐藏微信按钮',
+      '  smsText: ' + q(cfg.smsText) + ', // 一键短信的预填文案',
+      '  greeting: ' + q(cfg.greeting) + ', // 页面顶部礼貌用语',
+      '  note: ' + q(cfg.note) + ', // 副标题/承诺语，留空则隐藏',
+      '  showTipOnReveal: ' + (cfg.showTipOnReveal !== false) + ' // 点击显示号码时，是否先弹提示',
+      '};'
+    ].join('\n');
+  }
+
+  /* ----------------------------------------------------------------------
+     打印期间的临时隐藏 / 恢复
+     - 收起：给面板挂 .printing-hide
+     - 恢复：优先监听 afterprint；不触发 afterprint 的浏览器用 setTimeout 兜底，
+             避免用户取消打印后面板永久消失
+     ---------------------------------------------------------------------- */
+  var printRestoreTimer = null;
+
+  function onAfterPrint() {
+    restoreFromPrint();
+  }
+
+  function hideForPrint() {
+    if (printRestoreTimer) {
+      clearTimeout(printRestoreTimer);
+      printRestoreTimer = null;
+    }
+    $('setupWrap').classList.add('printing-hide');
+  }
+
+  function restoreFromPrint() {
+    if (printRestoreTimer) {
+      clearTimeout(printRestoreTimer);
+      printRestoreTimer = null;
+    }
+    $('setupWrap').classList.remove('printing-hide');
+    window.removeEventListener('afterprint', onAfterPrint);
+  }
+
+  function schedulePrintRestore() {
+    window.addEventListener('afterprint', onAfterPrint);
+    printRestoreTimer = setTimeout(restoreFromPrint, 1500);
+  }
+
+  /** 打印 A4 贴纸：填好二维码与车牌 → 收起面板 → 打印 → 恢复面板 */
+  function printSticker() {
+    function doPrint() {
+      // 1) 先把贴纸内容填充完成（顺序很重要：必须「先填充，再打印」）
+      var cfg = readForm();
+      var plate = String(cfg.plate || '').trim();
+      $('printPlate').textContent = plate ? (cfg.plateMasked ? U.maskPlate(plate) : plate) : '';
+
+      var fired = false;
+      function go() {
+        if (fired) return;
+        fired = true;
+        hideForPrint();         // 2) 打印前收起设置面板
+        window.print();
+        schedulePrintRestore(); // 3) 打印结束后恢复（afterprint + 定时兜底）
+      }
+
+      var img = $('printQrImg');
+      if (lastQrDataUrl) {
+        // 等图片真正解码完成再打印，避免贴纸上是空白框；
+        // onload/onerror 迟迟不触发时也要打印，不能把流程卡死
+        img.onload = go;
+        img.onerror = go;
+        img.src = lastQrDataUrl;
+        setTimeout(go, 400);
+      } else {
+        // src 为空字符串会让浏览器重新请求当前页面，这里直接移除属性
+        img.removeAttribute('src');
+        setTimeout(go, 200);
+      }
+    }
+
+    if (lastQrDataUrl) {
+      doPrint();
+    } else {
+      genQr(function (ok) {
+        if (!ok) {
+          toast('二维码不可用，请先手动把地址做成二维码');
+          return;
+        }
+        doPrint();
+      });
+    }
+  }
+
+  function bindSetupEvents() {
+    $('btnExitSetup').addEventListener('click', exitSetup);
+
+    $('btnGenQr').addEventListener('click', function () {
+      var btn = $('btnGenQr');
+      if (btn.disabled) return;   // 正在生成时忽略重复点击
+      btn.disabled = true;
+      btn.textContent = '🔳 生成中…';
+      genQr(function (ok) {
+        // 无论成功、失败还是超时，都要把按钮恢复到可点击状态
+        btn.disabled = false;
+        btn.textContent = '🔳 生成二维码';
+        toast(ok ? '二维码已生成' : '二维码生成失败，看下方提示');
+      });
+    });
+
+    $('btnDownloadQr').addEventListener('click', downloadQr);
+
+    $('btnCopyUrl').addEventListener('click', function () {
+      copyNumber(targetUrl(), '页面地址');
+    });
+
+    $('btnGenCode').addEventListener('click', function () {
+      var cfg = readForm();
+      $('genCode').value = buildConfigCode(cfg);
+      toast('已生成，复制后粘回文件顶部 CONFIG 区');
+    });
+
+    $('btnCopyCode').addEventListener('click', function () {
+      var code = $('genCode').value;
+      if (!code) {
+        toast('请先点「生成配置代码」');
+        return;
+      }
+      copyToClipboard(code).then(function (ok) {
+        toast(ok ? '代码已复制' : '复制失败，请手动全选复制');
+      });
+    });
+
+    $('btnPrint').addEventListener('click', printSticker);
+
+    $('btnSaveLocal').addEventListener('click', function () {
+      var cfg = readForm();
+      if (saveSaved(cfg)) {
+        toast('已保存到本机，下次进设置自动回填');
+      } else {
+        toast('保存失败：浏览器禁用了本地存储');
+      }
+    });
+
+    $('btnPreview').addEventListener('click', function () {
+      EC = readForm();
+      revealed = false;
+      closeWechat(true);
+      render();
+      $('setupWrap').hidden = true;
+      $('fabBack').hidden = false;
+      toast('已应用到本机预览（未改动源码）');
+    });
+
+    $('btnRestore').addEventListener('click', function () {
+      try {
+        window.localStorage.removeItem(LS_KEY);
+      } catch (e) {
+        /* localStorage 不可用时忽略 */
+      }
+      EC = cloneObj(FILE_CONFIG);
+      revealed = false;
+      closeWechat(true);
+      render();
+      fillForm(FILE_CONFIG);
+      $('fabBack').hidden = true;
+      toast('已恢复文件原始配置');
+    });
+  }
+
+  /* ---------------------------------------------------------------------
+     启动
+     --------------------------------------------------------------------- */
+
+  function init() {
+    render();
+    bindEvents();
+
+    // 微信内置浏览器：部分机型直接拨号会被拦截，顶部给出引导
+    if (navigator.userAgent && navigator.userAgent.indexOf('MicroMessenger') > -1) {
+      $('wechatTip').hidden = false;
+    }
+
+    // 设置向导入口：URL 参数 ?setup=1（连点车牌 5 次是另一个隐藏入口）
+    var q = U.parseQuery(window.location.search);
+    if (q.setup === '1') enterSetup(true);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+</body>
+</html>
