@@ -601,6 +601,44 @@
     return out;
   }
 
+  /**
+   * 判断本次访问能不能进「设置向导」。
+   *
+   * 规则（口令校验优先于 enableSetup）：
+   *   1) setupKey 填了口令：只有 ?setup=1&k=<正确口令> 才放行；
+   *      没带 k 或 k 不对，一律拒绝（此时 enableSetup 是 true 也不放行）。
+   *   2) setupKey 是空字符串：完全看 enableSetup，true 放行、false 拒绝。
+   *
+   * ⚠️ 说明白点：这只是「挡住顺手乱点的人」的入口开关，不是真正的安全边界。
+   *    源码是公开的，任何人看源码都能拿到口令，所以千万别把它当密码用；
+   *    真正的保护是把号码填成 enc: 开头的混淆串（见 CONFIG.phone 说明）。
+   *
+   * @param {Object<string,string>} queryObj parseQuery() 的结果，需含 setup / k
+   * @param {Object} cfg 配置对象，读取 enableSetup 与 setupKey
+   * @return {boolean} true=允许进入设置向导
+   */
+  function canEnterSetup(queryObj, cfg) {
+    var q = queryObj || {};
+    var c = cfg || {};
+    var key = (typeof c.setupKey === 'string') ? c.setupKey : '';
+    var k = (typeof q.k === 'string') ? q.k : '';
+
+    // 只在比较时去掉首尾空格：CONFIG 里误敲了空格、或复制地址时带了空格都能对上。
+    // 注意只 trim 比较用的副本，不改动 CONFIG 里的原值。
+    var keyTrim = String(key).trim();
+    var kTrim = String(k).trim();
+
+    // 口令优先：填了口令就只认「?setup=1&k=口令」这一条路
+    // 判据用未 trim 的 key：只要填了内容就算「已经设了口令」（纯空格也是非空字符串）
+    if (key !== '') {
+      // 只填了空格这类「填了却不构成口令」的情况：按 fail-closed 处理，一律拒绝
+      if (keyTrim === '') return false;
+      return q.setup === '1' && kTrim === keyTrim;
+    }
+    // 没填口令：由 enableSetup 决定（false = 彻底封死）
+    return c.enableSetup === true;
+  }
+
   /** 对外暴露的纯函数集合 */
   var MoveCarUtil = {
     maskPhone: maskPhone,
@@ -611,6 +649,7 @@
     getPhone: getPhone,
     getPageUrl: getPageUrl,
     parseQuery: parseQuery,
+    canEnterSetup: canEnterSetup,
     isIOS: isIOS
   };
 
@@ -838,9 +877,26 @@
       （在设置向导里点「生成配置代码」即可自动产出）。
    3. 不知道怎么填的字段保持默认即可，留空代表「不显示这一项」。
    4. 示例值 13800138000 是占位号码，请一定替换成你自己的号码。
-   5. 可视化配置（不用手写代码）：在页面地址后面加 `?setup=1` 回车，
-      例如 https://xxx.github.io/index.html?setup=1
-      （手机上也可以在页面里连点车牌 5 次进入，车牌留空时只能用地址方式）。
+   5. 二维码已经做好、也贴到车上了，就把下面的 enableSetup 设成 false：
+      这样扫码的人就算在地址后面加 ?setup=1 也进不去设置向导，
+      连点车牌 5 次也不会有反应，页面还不会再加载任何外部组件。
+      （建议二维码一贴上就关掉，更安全。）
+   6. 以后你自己还想进设置向导改东西，按下面三步来：
+      ① 把下面的 setupKey 填一个只有你知道的口令，比如 'wodekouling'；
+      ② 保存文件、重新上传到 GitHub；
+      ③ 访问 https://xxx.github.io/index.html?setup=1&k=wodekouling 就能进去。
+      ④ 改完之后，再把 setupKey 改回 ''（空引号）、重新上传一次，就又彻底封死了。
+      ⑤ 口令区分大小写：填了 'WodeKouling' 就只能用 'WodeKouling' 进，
+         写成 wodekouling 是进不去的（首尾多敲了空格没关系，会自动忽略）。
+      ⑥ 设了口令之后，「连点车牌 5 次」这个入口就失效了（它没法带口令），
+         只能用 ③ 那个 ?setup=1&k=口令 的地址进去。
+      ⑦ 改完配置记得点一下页面里的「退出设置」：在向导里的时候，
+         地址栏一直带着 ?k=口令，直接截屏、分享或加书签都会把口令泄露出去；
+         点「退出设置」会把地址栏里的 ?k=... 清掉。
+      ⚠️ 口令只是挡住顺手乱点的人，看源码的人还是能看到，别把它当密码。
+   7. 在向导里点「生成配置代码」时：enableSetup 会照原样写进代码里，
+      但 setupKey 只会写一个空的 ''（怕你截图或发给别人时把口令泄露出去）。
+      所以粘回文件之后，如果还想用口令进向导，要手动把 setupKey 再填一次。
 
    ========================================================================== */
 const CONFIG = {
@@ -854,7 +910,9 @@ const CONFIG = {
   smsText: '您好，您的车挡道了，麻烦挪一下，谢谢！',  // 一键短信的预填文案
   greeting: '不好意思，给您添麻烦了',  // 页面顶部礼貌用语
   note: '我马上就到，请稍等 1 分钟',   // 副标题/承诺语，留空则隐藏
-  showTipOnReveal: true           // 点击显示号码时，是否先提示「请您在需要时再查看，感谢」
+  showTipOnReveal: false,          // 点击显示号码时，是否先提示「请您在需要时再查看，感谢」
+  enableSetup: true,           // false=关闭设置向导（推荐，二维码贴车上之后务必关掉）
+  setupKey: ''                  // 留空=彻底封死；填上口令后，只有 ?setup=1&k=口令 才能进
 };
 /* ==========================================================================
    👆👆👆 配置区结束：下面的代码不需要修改 👆👆👆
@@ -884,6 +942,11 @@ const CONFIG = {
   var toastTimer = null;
   var plateClickCount = 0;
   var plateClickTimer = null;
+  /**
+   * 本次访问是否已解锁设置向导（由 U.canEnterSetup 在启动时算一次）。
+   * 没解锁时：?setup=1 进不去、连点车牌 5 次静默忽略、不加载二维码 CDN。
+   */
+  var setupUnlocked = false;
 
   /* ---------------------------------------------------------------------
      小工具
@@ -1139,6 +1202,8 @@ const CONFIG = {
 
     // 连点车牌 5 次 → 进入设置向导（隐藏彩蛋入口，扫码者不会误触）
     $('plateText').addEventListener('click', function () {
+      // 未解锁时静默忽略：不计数、不弹任何提示，避免暴露「有这个隐藏入口」
+      if (!setupUnlocked) return;
       plateClickCount++;
       if (plateClickTimer) clearTimeout(plateClickTimer);
       plateClickTimer = setTimeout(function () {
@@ -1261,6 +1326,11 @@ const CONFIG = {
    * @param {function(boolean)} cb true=加载成功
    */
   function loadQrLib(cb) {
+    // 设置向导被关掉时直接短路：不插入 <script>，页面就一个外部依赖都没有了
+    if (!setupUnlocked) {
+      cb(false);
+      return;
+    }
     if (window.QRCode) {
       cb(true);
       return;
@@ -1410,7 +1480,9 @@ const CONFIG = {
       '  smsText: ' + q(cfg.smsText) + ', // 一键短信的预填文案',
       '  greeting: ' + q(cfg.greeting) + ', // 页面顶部礼貌用语',
       '  note: ' + q(cfg.note) + ', // 副标题/承诺语，留空则隐藏',
-      '  showTipOnReveal: ' + (cfg.showTipOnReveal !== false) + ' // 点击显示号码时，是否先弹提示',
+      '  showTipOnReveal: ' + (cfg.showTipOnReveal !== false) + ', // 点击显示号码时，是否先弹提示',
+      '  enableSetup: ' + (cfg.enableSetup === true) + ', // false=关闭设置向导（推荐，二维码贴车上之后务必关掉）',
+      '  setupKey: ' + q('') + ' // ⚠️ 私密口令默认留空不导出；如需保留请在此手动填写，填了才能用 ?setup=1&k=口令 进入',
       '};'
     ].join('\n');
   }
@@ -1519,7 +1591,12 @@ const CONFIG = {
     $('btnGenCode').addEventListener('click', function () {
       var cfg = readForm();
       $('genCode').value = buildConfigCode(cfg);
-      toast('已生成，复制后粘回文件顶部 CONFIG 区');
+      // 口令不写进生成的代码，车主粘回文件后必须手动补，否则 ?setup=1&k=口令 会失效
+      if (String(FILE_CONFIG.setupKey || '') !== '') {
+        toast('已生成配置代码（私密口令未导出，如需请手动填写 setupKey）');
+      } else {
+        toast('已生成，复制后粘回文件顶部 CONFIG 区');
+      }
     });
 
     $('btnCopyCode').addEventListener('click', function () {
@@ -1578,14 +1655,18 @@ const CONFIG = {
     render();
     bindEvents();
 
+    // 设置向导入口的统一判断：口令（?k=）优先于 enableSetup 开关
+    var q = U.parseQuery(window.location.search);
+    setupUnlocked = U.canEnterSetup(q, CONFIG);
+
     // 微信内置浏览器：部分机型直接拨号会被拦截，顶部给出引导
     if (navigator.userAgent && navigator.userAgent.indexOf('MicroMessenger') > -1) {
       $('wechatTip').hidden = false;
     }
 
     // 设置向导入口：URL 参数 ?setup=1（连点车牌 5 次是另一个隐藏入口）
-    var q = U.parseQuery(window.location.search);
-    if (q.setup === '1') enterSetup(true);
+    // 只有解锁后才进，且必须是 ?setup=1；未解锁时 ?setup=1 等同普通访客
+    if (setupUnlocked && q.setup === '1') enterSetup(true);
   }
 
   if (document.readyState === 'loading') {
