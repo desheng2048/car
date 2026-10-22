@@ -246,22 +246,6 @@
   .field textarea { resize: vertical; min-height: 76px; line-height: 1.6; }
   .field-inline { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 
-  .qr-box {
-    min-height: 220px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    border: 1px dashed var(--border);
-    border-radius: var(--r-card);
-    padding: 16px;
-    text-align: center;
-    background: #fafbfc;
-  }
-  .qr-box canvas, .qr-box img { display: block; }
-  .qr-fallback { font-size: 12px; color: var(--text-sub); word-break: break-all; }
-
   .setup-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
   .setup-actions.one { grid-template-columns: 1fr; }
   .split-line { height: 1px; background: var(--line); margin: 18px 0; }
@@ -282,40 +266,6 @@
     font-weight: 600;
     cursor: pointer;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
-  }
-
-  /* 打印期间由 JS 临时挂上：保证 Setting 面板在打印瞬间真正不可见
-     （不同浏览器对 position:fixed 的打印处理不一致，必须运行时再兜一层） */
-  .printing-hide { display: none !important; }
-
-  /* ==========================================================================
-     打印区（A4 贴纸）：屏幕上不可见，仅 @media print 生效
-     ========================================================================== */
-  #printSheet { display: none; }
-  @media print {
-    body { background: #ffffff !important; }
-    #screenWrap { display: none !important; }
-    /* 设置向导覆盖层独立在 #screenWrap 之外，必须单独隐藏，
-       否则 position:fixed + z-index:500 的白色面板会整页盖住贴纸 */
-    .setup-wrap { display: none !important; }
-    .fab-back { display: none !important; }
-    .toast { display: none !important; }
-    #printSheet { display: block !important; }
-    @page { size: A4; margin: 12mm; }
-    .sticker {
-      width: 120mm;
-      margin: 0 auto;
-      border: 2px dashed #999999;
-      border-radius: 6mm;
-      padding: 10mm 6mm;
-      text-align: center;
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
-    }
-    .sticker-title { font-size: 30px; font-weight: 800; letter-spacing: 2px; }
-    .sticker-qr { margin: 8mm 0; }
-    .sticker-qr img { width: 60mm; height: 60mm; display: block; margin: 0 auto; }
-    .sticker-plate { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
-    .sticker-tip { margin-top: 4mm; font-size: 14px; color: #444444; }
   }
 </style>
 
@@ -808,29 +758,10 @@
 
     <div class="split-line"></div>
 
-    <div class="field">
-      <label for="f_pageUrl">页面地址<span class="hint">把这个地址做成二维码贴在挡风玻璃上</span></label>
-      <input type="text" id="f_pageUrl">
-    </div>
-
-    <button type="button" class="btn btn-primary" id="btnGenQr">🔳 生成二维码</button>
-    <div class="setup-actions">
-      <button type="button" class="btn btn-outline" id="btnDownloadQr">⬇️ 下载 PNG</button>
-      <button type="button" class="btn btn-outline" id="btnCopyUrl">🔗 复制地址</button>
-    </div>
-
-    <div class="field" style="margin-top:12px">
-      <label>二维码预览</label>
-      <div class="qr-box" id="qrBox"><span class="qr-fallback">尚未生成，点上方「生成二维码」</span></div>
-    </div>
-
-    <div class="split-line"></div>
-
     <button type="button" class="btn btn-outline" id="btnGenCode">📝 生成配置代码</button>
     <textarea id="genCode" rows="8" placeholder="点上方按钮后，这里会出现可直接粘回 CONFIG 的代码"></textarea>
-    <div class="setup-actions">
+    <div class="setup-actions one">
       <button type="button" class="btn btn-outline" id="btnCopyCode">📋 一键复制代码</button>
-      <button type="button" class="btn btn-outline" id="btnPrint">🖨 打印贴纸</button>
     </div>
 
     <div class="split-line"></div>
@@ -846,18 +777,6 @@
     </p>
   </div>
 </div><!-- /#setupWrap -->
-
-<!-- ==========================================================================
-     打印贴纸（屏幕不可见，打印时出现）
-     ========================================================================== -->
-<div id="printSheet">
-  <div class="sticker">
-    <div class="sticker-title">扫码呼叫挪车</div>
-    <div class="sticker-qr"><img id="printQrImg" alt="挪车二维码"></div>
-    <div class="sticker-plate" id="printPlate"></div>
-    <div class="sticker-tip">临时停车，给您添麻烦了</div>
-  </div>
-</div>
 
 <div class="toast" id="toast"></div>
 
@@ -937,14 +856,12 @@ const CONFIG = {
   var revealed = false;
   /** 微信二维码是否展开 */
   var wechatOpen = false;
-  /** 最后一次生成的二维码 dataURL，下载 PNG / 打印贴纸都用它 */
-  var lastQrDataUrl = '';
   var toastTimer = null;
   var plateClickCount = 0;
   var plateClickTimer = null;
   /**
    * 本次访问是否已解锁设置向导（由 U.canEnterSetup 在启动时算一次）。
-   * 没解锁时：?setup=1 进不去、连点车牌 5 次静默忽略、不加载二维码 CDN。
+   * 没解锁时：?setup=1 进不去、连点车牌 5 次静默忽略。
    */
   var setupUnlocked = false;
 
@@ -1266,12 +1183,6 @@ const CONFIG = {
     $(fieldId('phoneBackup')).value = U.getPhone(cfg.phoneBackup);
     $(fieldId('plateMasked')).checked = cfg.plateMasked !== false;
     $(fieldId('showTipOnReveal')).checked = cfg.showTipOnReveal !== false;
-    setPageUrlField();
-  }
-
-  function setPageUrlField() {
-    var el = $(fieldId('pageUrl'));
-    if (el && !el.value) el.value = U.getPageUrl(window.location.href);
   }
 
   /** 进入设置向导。fromEgg=true 表示是彩蛋/首次进入，需要提示 */
@@ -1313,134 +1224,6 @@ const CONFIG = {
     } catch (e) {
       return false;
     }
-  }
-
-  /** 当前地址（表单里的地址优先，空则取页面地址） */
-  function targetUrl() {
-    var v = String($(fieldId('pageUrl')).value || '').trim();
-    return v || U.getPageUrl(window.location.href);
-  }
-
-  /**
-   * 动态加载 qrcodejs CDN。
-   * @param {function(boolean)} cb true=加载成功
-   */
-  function loadQrLib(cb) {
-    // 设置向导被关掉时直接短路：不插入 <script>，页面就一个外部依赖都没有了
-    if (!setupUnlocked) {
-      cb(false);
-      return;
-    }
-    if (window.QRCode) {
-      cb(true);
-      return;
-    }
-    // done 保证 cb 只被调用一次（超时与 onerror 可能同时发生）
-    var done = false;
-    function finish(ok) {
-      if (done) return;
-      done = true;
-      cb(ok);
-    }
-    var timer = setTimeout(function () {
-      // jsdelivr 在国内可能请求挂起（既不 onload 也不 onerror），
-      // 超时后主动走降级分支，避免按钮点了永远没反应
-      finish(false);
-    }, 8000);
-
-    var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
-    s.onload = function () {
-      clearTimeout(timer);
-      finish(!!window.QRCode);
-    };
-    s.onerror = function () {
-      clearTimeout(timer);
-      finish(false);
-    };
-    document.head.appendChild(s);
-  }
-
-  /** 二维码不可用时的降级提示（含复制地址按钮） */
-  function showQrFallback(msg) {
-    var box = $('qrBox');
-    box.innerHTML = '';
-    var tip = document.createElement('div');
-    tip.className = 'qr-fallback';
-    tip.textContent = msg;
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn-sm';
-    btn.style.marginTop = '10px';
-    btn.textContent = '🔗 复制页面地址';
-    btn.addEventListener('click', function () {
-      copyNumber(targetUrl(), '');
-    });
-    box.appendChild(tip);
-    box.appendChild(btn);
-    lastQrDataUrl = '';
-  }
-
-  /**
-   * 生成二维码。成功时同时把 dataURL 缓存到 lastQrDataUrl，
-   * 供「下载 PNG」和「打印贴纸」复用（避免重复渲染）。
-   * @param {function(boolean)=} cb 完成回调
-   */
-  function genQr(cb) {
-    var box = $('qrBox');
-    var url = targetUrl();
-    loadQrLib(function (ok) {
-      if (!ok) {
-        showQrFallback('离线环境下无法自动生成二维码，请手动用草料二维码 / 微信生成，地址：' + url);
-        if (cb) cb(false);
-        return;
-      }
-      try {
-        box.innerHTML = '';
-        /* eslint-disable no-new */
-        new window.QRCode(box, {
-          text: url,
-          width: 200,
-          height: 200,
-          colorDark: '#1a1a1a',
-          colorLight: '#ffffff',
-          correctLevel: window.QRCode.CorrectLevel.M
-        });
-        // canvas 存在就导出 PNG dataURL（同源渲染，不会被跨域污染）
-        var canvas = box.querySelector('canvas');
-        if (canvas) {
-          lastQrDataUrl = canvas.toDataURL('image/png');
-        } else {
-          var img = box.querySelector('img');
-          lastQrDataUrl = img && img.src ? img.src : '';
-        }
-        if (cb) cb(true);
-      } catch (e) {
-        showQrFallback('二维码生成失败，请手动用草料二维码生成，地址：' + url);
-        if (cb) cb(false);
-      }
-    });
-  }
-
-  /** 下载二维码 PNG；拿不到图片数据时提示长按保存 */
-  function downloadQr() {
-    var href = lastQrDataUrl;
-    var img = $('qrBox').querySelector('img');
-    if (!href && img && img.src && (img.src.indexOf('data:') === 0 || img.src.indexOf('blob:') === 0)) {
-      href = img.src;
-    }
-    if (!href) {
-      toast('无法自动下载，请先生成二维码后长按图片保存');
-      return;
-    }
-    var a = document.createElement('a');
-    a.href = href;
-    a.download = 'movecar-qrcode.png';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    toast('已尝试下载 PNG');
   }
 
   /**
@@ -1487,106 +1270,8 @@ const CONFIG = {
     ].join('\n');
   }
 
-  /* ----------------------------------------------------------------------
-     打印期间的临时隐藏 / 恢复
-     - 收起：给面板挂 .printing-hide
-     - 恢复：优先监听 afterprint；不触发 afterprint 的浏览器用 setTimeout 兜底，
-             避免用户取消打印后面板永久消失
-     ---------------------------------------------------------------------- */
-  var printRestoreTimer = null;
-
-  function onAfterPrint() {
-    restoreFromPrint();
-  }
-
-  function hideForPrint() {
-    if (printRestoreTimer) {
-      clearTimeout(printRestoreTimer);
-      printRestoreTimer = null;
-    }
-    $('setupWrap').classList.add('printing-hide');
-  }
-
-  function restoreFromPrint() {
-    if (printRestoreTimer) {
-      clearTimeout(printRestoreTimer);
-      printRestoreTimer = null;
-    }
-    $('setupWrap').classList.remove('printing-hide');
-    window.removeEventListener('afterprint', onAfterPrint);
-  }
-
-  function schedulePrintRestore() {
-    window.addEventListener('afterprint', onAfterPrint);
-    printRestoreTimer = setTimeout(restoreFromPrint, 1500);
-  }
-
-  /** 打印 A4 贴纸：填好二维码与车牌 → 收起面板 → 打印 → 恢复面板 */
-  function printSticker() {
-    function doPrint() {
-      // 1) 先把贴纸内容填充完成（顺序很重要：必须「先填充，再打印」）
-      var cfg = readForm();
-      var plate = String(cfg.plate || '').trim();
-      $('printPlate').textContent = plate ? (cfg.plateMasked ? U.maskPlate(plate) : plate) : '';
-
-      var fired = false;
-      function go() {
-        if (fired) return;
-        fired = true;
-        hideForPrint();         // 2) 打印前收起设置面板
-        window.print();
-        schedulePrintRestore(); // 3) 打印结束后恢复（afterprint + 定时兜底）
-      }
-
-      var img = $('printQrImg');
-      if (lastQrDataUrl) {
-        // 等图片真正解码完成再打印，避免贴纸上是空白框；
-        // onload/onerror 迟迟不触发时也要打印，不能把流程卡死
-        img.onload = go;
-        img.onerror = go;
-        img.src = lastQrDataUrl;
-        setTimeout(go, 400);
-      } else {
-        // src 为空字符串会让浏览器重新请求当前页面，这里直接移除属性
-        img.removeAttribute('src');
-        setTimeout(go, 200);
-      }
-    }
-
-    if (lastQrDataUrl) {
-      doPrint();
-    } else {
-      genQr(function (ok) {
-        if (!ok) {
-          toast('二维码不可用，请先手动把地址做成二维码');
-          return;
-        }
-        doPrint();
-      });
-    }
-  }
-
   function bindSetupEvents() {
     $('btnExitSetup').addEventListener('click', exitSetup);
-
-    $('btnGenQr').addEventListener('click', function () {
-      var btn = $('btnGenQr');
-      if (btn.disabled) return;   // 正在生成时忽略重复点击
-      btn.disabled = true;
-      btn.textContent = '🔳 生成中…';
-      genQr(function (ok) {
-        // 无论成功、失败还是超时，都要把按钮恢复到可点击状态
-        btn.disabled = false;
-        btn.textContent = '🔳 生成二维码';
-        toast(ok ? '二维码已生成' : '二维码生成失败，看下方提示');
-      });
-    });
-
-    $('btnDownloadQr').addEventListener('click', downloadQr);
-
-    $('btnCopyUrl').addEventListener('click', function () {
-      copyNumber(targetUrl(), '页面地址');
-    });
 
     $('btnGenCode').addEventListener('click', function () {
       var cfg = readForm();
@@ -1609,8 +1294,6 @@ const CONFIG = {
         toast(ok ? '代码已复制' : '复制失败，请手动全选复制');
       });
     });
-
-    $('btnPrint').addEventListener('click', printSticker);
 
     $('btnSaveLocal').addEventListener('click', function () {
       var cfg = readForm();
